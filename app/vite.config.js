@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'BU-BRIQUES',
         short_name: 'BU-BRIQUES',
         description: 'Gestão de produtos e vendas',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#ffffff',
+        background_color: '#f4f6f9',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -47,6 +47,18 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('recharts')) return 'vendor-charts'
+          if (id.includes('@supabase')) return 'vendor-supabase'
+          if (id.includes('lucide-react') || id.includes('sonner')) return 'vendor-ui'
+          if (id.includes('react-dom') || id.includes('react-router')) return 'vendor-react'
+        },
+      },
     },
   },
 })

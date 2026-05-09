@@ -1,11 +1,11 @@
 import { cn } from '@/lib/utils'
 
 const variants = {
-  default: 'bg-primary/20 text-primary border-primary/30',
+  default: 'bg-primary/10 text-primary border-primary/20',
   secondary: 'bg-secondary text-muted-foreground border-border',
-  destructive: 'bg-destructive/20 text-destructive border-destructive/30',
-  success: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  warning: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  destructive: 'bg-red-50 text-red-700 border-red-200',
+  success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  warning: 'bg-amber-50 text-amber-700 border-amber-200',
 }
 
 export function Badge({ className, variant = 'default', ...props }) {

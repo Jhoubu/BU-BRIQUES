@@ -220,32 +220,32 @@ export default function Dashboard() {
           icon={DollarSign}
           label="Faturamento"
           value={formatCurrency(m.faturamentoTotal)}
-          iconColor="text-blue-400"
+          iconColor="text-blue-600"
         />
         <MetricCard
           icon={Layers}
           label="Investido"
           value={formatCurrency(m.totalInvestido)}
-          iconColor="text-amber-400"
+          iconColor="text-amber-600"
         />
         <MetricCard
           icon={Package}
           label="Em Estoque"
           value={formatCurrency(m.valorEstoque)}
-          iconColor="text-violet-400"
+          iconColor="text-violet-600"
         />
         <MetricCard
           icon={CheckCircle2}
           label="Vendidos"
           value={m.produtosVendidos ?? 0}
-          iconColor="text-emerald-400"
+          iconColor="text-emerald-600"
         />
         <MetricCard
           icon={TrendingUp}
           label="Lucro Estimado"
           value={formatCurrency(m.lucroEstimadoEstoque)}
           sub="estimado pelo estoque"
-          iconColor="text-cyan-400"
+          iconColor="text-cyan-600"
         />
       </div>
 
