@@ -143,7 +143,11 @@ export function useDashboard() {
     }).filter(m => m !== null)
     const margemMedia = margens.length ? margens.reduce((a, b) => a + b, 0) / margens.length : 0
 
-    const lucroEstimadoEstoque = valorEstoque * (margemMedia / 100)
+    const lucroEstimadoEstoque = disponiveis.reduce((s, item) => {
+      const custo = custoTotal(item)
+      if (item.preco_estimado_venda != null) return s + (item.preco_estimado_venda - custo)
+      return s + custo * (margemMedia / 100)
+    }, 0)
 
     // Top 3 produtos mais lucrativos
     const topProdutos = v.map(venda => {
@@ -253,7 +257,12 @@ export async function uploadFoto(file, produtoId) {
   const ext = file.name.split('.').pop()
   const path = `${produtoId}.${ext}`
   const { error } = await supabase.storage.from('produtos').upload(path, file, { upsert: true })
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('Bucket not found') || error.statusCode === '404') {
+      throw new Error('Bucket de fotos não encontrado. Execute o SQL de criação do bucket no Supabase.')
+    }
+    throw new Error(`Falha no upload: ${error.message}`)
+  }
   const { data } = supabase.storage.from('produtos').getPublicUrl(path)
   return data.publicUrl
 }

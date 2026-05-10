@@ -18,6 +18,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { CardSkeleton } from '@/components/layout/Skeleton'
 import { toast } from 'sonner'
 
+// ── Helpers ───────────────────────────────────────────────────
+function getDiasInfo(data_compra) {
+  if (!data_compra) return null
+  const dias = Math.floor((Date.now() - new Date(data_compra)) / 86400000)
+  if (dias <= 15) return { dias, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  if (dias <= 30) return { dias, cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+  return { dias, cls: 'bg-red-50 text-red-700 border-red-200' }
+}
+
+const hoje = new Date().toISOString().split('T')[0]
+
 // ── Modal: Novo / Editar Produto ──────────────────────────────
 function ProdutoModal({ open, onClose, produto, onSuccess }) {
   const isEditing = !!produto
@@ -25,6 +36,8 @@ function ProdutoModal({ open, onClose, produto, onSuccess }) {
     titulo: produto?.titulo ?? '',
     descricao: produto?.descricao ?? '',
     custo_base: produto?.custo_base ?? '',
+    preco_estimado_venda: produto?.preco_estimado_venda ?? '',
+    data_compra: produto?.data_compra ?? '',
   })
   const [foto, setFoto] = useState(null)
   const [preview, setPreview] = useState(produto?.foto_url ?? null)
@@ -43,17 +56,27 @@ function ProdutoModal({ open, onClose, produto, onSuccess }) {
   const handleSubmit = async () => {
     if (!form.titulo.trim()) { toast.error('Título obrigatório'); return }
     const custo = parseFloat(String(form.custo_base).replace(',', '.'))
-    if (isNaN(custo)) { toast.error('Custo base inválido'); return }
+    if (isNaN(custo)) { toast.error('Custo de compra inválido'); return }
+    const estimado = form.preco_estimado_venda !== ''
+      ? parseFloat(String(form.preco_estimado_venda).replace(',', '.'))
+      : null
+    if (estimado !== null && isNaN(estimado)) { toast.error('Preço estimado inválido'); return }
+
+    // Monta payload sem incluir colunas novas quando estão vazias
+    // (evita 400 se a migration SQL ainda não foi executada no Supabase)
+    const payload = { titulo: form.titulo, descricao: form.descricao, custo_base: custo }
+    if (form.data_compra) payload.data_compra = form.data_compra
+    if (estimado !== null) payload.preco_estimado_venda = estimado
 
     setSaving(true)
     try {
       if (isEditing) {
         let foto_url = produto.foto_url
         if (foto) foto_url = await uploadFoto(foto, produto.id)
-        await updateProduto(produto.id, { titulo: form.titulo, descricao: form.descricao, custo_base: custo, foto_url })
+        await updateProduto(produto.id, { ...payload, foto_url })
         toast.success('Produto atualizado!')
       } else {
-        const novo = await createProduto({ titulo: form.titulo, descricao: form.descricao, custo_base: custo })
+        const novo = await createProduto(payload)
         if (foto) {
           const foto_url = await uploadFoto(foto, novo.id)
           await updateProduto(novo.id, { foto_url })
@@ -63,7 +86,7 @@ function ProdutoModal({ open, onClose, produto, onSuccess }) {
       onSuccess()
       onClose()
     } catch (e) {
-      toast.error(isEditing ? 'Erro ao atualizar' : 'Erro ao criar produto')
+      toast.error(e?.message ?? (isEditing ? 'Erro ao atualizar' : 'Erro ao criar produto'))
     } finally {
       setSaving(false)
     }
@@ -104,10 +127,23 @@ function ProdutoModal({ open, onClose, produto, onSuccess }) {
             <Textarea id="desc" className="mt-1.5" value={form.descricao} onChange={set('descricao')} placeholder="Detalhes do produto..." />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="custo">Custo de Compra (R$) *</Label>
+              <Input id="custo" className="mt-1.5" type="number" step="0.01" min="0" inputMode="decimal"
+                value={form.custo_base} onChange={set('custo_base')} placeholder="0,00" />
+            </div>
+            <div>
+              <Label htmlFor="estimado">Preço Est. Venda (R$)</Label>
+              <Input id="estimado" className="mt-1.5" type="number" step="0.01" min="0" inputMode="decimal"
+                value={form.preco_estimado_venda} onChange={set('preco_estimado_venda')} placeholder="0,00" />
+            </div>
+          </div>
+
           <div>
-            <Label htmlFor="custo">Custo Base (R$) *</Label>
-            <Input id="custo" className="mt-1.5" type="number" step="0.01" min="0" inputMode="decimal"
-              value={form.custo_base} onChange={set('custo_base')} placeholder="0,00" />
+            <Label htmlFor="data_compra">Data da Compra</Label>
+            <Input id="data_compra" className="mt-1.5" type="date"
+              value={form.data_compra} onChange={set('data_compra')} />
           </div>
 
           <Button className="w-full" onClick={handleSubmit} disabled={saving}>
@@ -289,8 +325,10 @@ function ProdutoCard({ produto, onRefetch }) {
   const [deleting, setDeleting] = useState(false)
 
   const gastos = produto.gastos_produto ?? []
-  const custoTotal = (produto.custo_base ?? 0) + gastos.reduce((s, g) => s + g.valor, 0)
+  const gastosExtras = gastos.reduce((s, g) => s + g.valor, 0)
+  const custoTotal = (produto.custo_base ?? 0) + gastosExtras
   const isVendido = produto.status === 'vendido'
+  const diasInfo = !isVendido ? getDiasInfo(produto.data_compra) : null
 
   const handleDelete = async () => {
     if (!confirm(`Excluir "${produto.titulo}"?`)) return
@@ -331,24 +369,33 @@ function ProdutoCard({ produto, onRefetch }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-semibold text-sm leading-tight line-clamp-2">{produto.titulo}</p>
-                <Badge variant={isVendido ? 'secondary' : 'success'} className="flex-shrink-0 text-xs">
-                  {isVendido ? 'Vendido' : 'Disponível'}
-                </Badge>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {diasInfo && (
+                    <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${diasInfo.cls}`}>
+                      {diasInfo.dias}d
+                    </span>
+                  )}
+                  <Badge variant={isVendido ? 'secondary' : 'success'} className="text-xs">
+                    {isVendido ? 'Vendido' : 'Disponível'}
+                  </Badge>
+                </div>
               </div>
               {produto.descricao && (
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{produto.descricao}</p>
               )}
               <div className="flex items-center gap-3 mt-2">
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Custo total</p>
+                  <p className="text-[10px] text-muted-foreground">Custo Compra</p>
+                  <p className="text-sm font-medium tabular-nums">{formatCurrency(produto.custo_base ?? 0)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Gastos Extras</p>
+                  <p className="text-sm font-medium tabular-nums">{formatCurrency(gastosExtras)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Gasto Total</p>
                   <p className="text-sm font-bold tabular-nums">{formatCurrency(custoTotal)}</p>
                 </div>
-                {gastos.length > 0 && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Gastos extras</p>
-                    <p className="text-sm font-medium tabular-nums">{formatCurrency(gastos.reduce((s, g) => s + g.valor, 0))}</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

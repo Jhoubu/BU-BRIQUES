@@ -45,9 +45,33 @@ create table if not exists meta_mes (
 -- ============================================================
 -- Storage bucket for product photos (run once)
 -- ============================================================
--- insert into storage.buckets (id, name, public)
--- values ('produtos', 'produtos', true)
--- on conflict do nothing;
+insert into storage.buckets (id, name, public)
+values ('produtos', 'produtos', true)
+on conflict do nothing;
+
+-- Storage RLS policies
+create policy "Public read produtos"
+  on storage.objects for select
+  using (bucket_id = 'produtos');
+
+create policy "Anon upload produtos"
+  on storage.objects for insert
+  with check (bucket_id = 'produtos');
+
+create policy "Anon update produtos"
+  on storage.objects for update
+  using (bucket_id = 'produtos');
+
+create policy "Anon delete produtos"
+  on storage.objects for delete
+  using (bucket_id = 'produtos');
+
+-- ============================================================
+-- Migration: add data_compra and preco_estimado_venda to produtos
+-- Run this if the table already exists
+-- ============================================================
+alter table produtos add column if not exists data_compra date;
+alter table produtos add column if not exists preco_estimado_venda numeric(12,2);
 
 -- ============================================================
 -- RLS: Disable for personal use (or configure per your needs)
